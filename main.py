@@ -3,16 +3,17 @@ Aurora Search Engine API
 A fast search engine for messages and movies.
 """
 
-from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Query, Request, Response
+from fastapi.responses import JSONResponse, ORJSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from brotli_asgi import BrotliMiddleware
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import time
 from typing import Optional
+import orjson
 
 from config import settings
 from data_fetcher import fetch_all_data
@@ -46,21 +47,22 @@ async def lifespan(app: FastAPI):
     print("👋 Shutting down...")
 
 
-# Create FastAPI app
+# Create FastAPI app with ORJson for faster JSON serialization
 app = FastAPI(
     title=settings.APP_NAME,
     description="Fast search API for messages and movies",
     version=settings.APP_VERSION,
     lifespan=lifespan,
-    debug=settings.DEBUG
+    debug=settings.DEBUG,
+    default_response_class=ORJSONResponse
 )
 
 # Add rate limiter to app state
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Add GZip compression middleware (reduces response size by 70-80%)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Add Brotli compression middleware (20% better compression than GZip)
+app.add_middleware(BrotliMiddleware, minimum_size=1000, quality=4)
 
 # Add CORS middleware
 if settings.CORS_ENABLED:
@@ -88,10 +90,11 @@ async def root():
     }
 
 
-@app.get("/search")
+@app.get("/search", response_model=None)
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute" if settings.RATE_LIMIT_ENABLED else "1000/minute")
 async def search(
     request: Request,
+    response: Response,
     q: str = Query(..., description="Search query", min_length=1, max_length=settings.MAX_QUERY_LENGTH),
     type: Optional[str] = Query("all", description="Search type: 'messages', 'movies', or 'all'"),
     skip: int = Query(0, ge=0, description="Number of results to skip"),
@@ -144,15 +147,20 @@ async def search(
     # Calculate query time
     query_time_ms = round((time.time() - start_time) * 1000, 2)
 
+    # Add edge caching headers for CDN/edge caching
+    # Cache for 60s, serve stale for up to 3600s while revalidating
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=3600"
+    response.headers["CDN-Cache-Control"] = "public, max-age=300, stale-while-revalidate=3600"
+
     # Build response
-    response = {
+    response_data = {
         "query": q,
         "type": type,
         "query_time_ms": query_time_ms,
         "results": paginated_results
     }
 
-    return response
+    return response_data
 
 
 @app.get("/health")
