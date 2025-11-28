@@ -6,6 +6,7 @@ A fast search engine for messages and movies.
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -57,6 +58,9 @@ app = FastAPI(
 # Add rate limiter to app state
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add GZip compression middleware (reduces response size by 70-80%)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Add CORS middleware
 if settings.CORS_ENABLED:
