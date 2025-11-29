@@ -1,0 +1,53 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master  # Deploy when pushing to master branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to EC2
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      run: |
+        # Save SSH key to file
+        echo "$EC2_SSH_KEY" > ec2_key.pem
+        chmod 400 ec2_key.pem
+
+        # SSH into EC2 and deploy
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
+          cd ~/aurora-search-engine
+
+          # Pull latest code from GitHub
+          git fetch origin
+          git reset --hard origin/master
+
+          # Activate virtual environment
+          source venv/bin/activate
+
+          # Install/update dependencies
+          pip install -r requirements.txt
+
+          # Restart the service with new code
+          sudo systemctl restart aurora
+
+          # Wait for service to start
+          sleep 2
+
+          # Check service status
+          sudo systemctl status aurora --no-pager
+
+          echo "✅ Deployment successful!"
+        ENDSSH
+
+        # Clean up
+        rm -f ec2_key.pem
