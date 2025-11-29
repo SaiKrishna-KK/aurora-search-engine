@@ -236,7 +236,7 @@ When building this search engine, I evaluated multiple approaches:
 - Would add 500MB+ memory overhead
 - Takes minutes to set up
 - Costs money at scale
-- Unnecessary complexity for 100 messages
+- Unnecessary complexity for 1500 messages
 
 **When to use it:** Billions of records, fuzzy matching, multi-language support.
 </details>
@@ -478,7 +478,7 @@ Building this taught me:
 |--------|--------|
 | Average query time | 0.02ms |
 | 95th percentile | 0.05ms |
-| Data loaded | 100 messages, 35 movies |
+| Data loaded | 1500 messages, 35 movies |
 | Memory usage | ~50MB |
 | Requests/second | 1000+ (single instance) |
 
