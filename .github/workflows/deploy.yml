@@ -19,9 +19,16 @@ jobs:
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       run: |
-        # Save SSH key to file (use echo -e to preserve newlines)
-        echo -e "$EC2_SSH_KEY" > ec2_key.pem
+        # Save SSH key to file and fix permissions
+        echo "$EC2_SSH_KEY" > ec2_key.pem
         chmod 400 ec2_key.pem
+
+        # Debug: Check if key file was created properly
+        echo "Key file size: $(wc -c < ec2_key.pem) bytes"
+        head -n 1 ec2_key.pem
+
+        # Test SSH connection first
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ec2_key.pem $EC2_USERNAME@$EC2_HOST "echo 'SSH connection successful'" || exit 1
 
         # SSH into EC2 and deploy
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
