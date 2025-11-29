@@ -4,7 +4,7 @@ A lightning-fast search API that finds what you need in under 2 milliseconds.
 
 ## What It Does
 
-Think of it as Google for messages and movies—you type what you're looking for, and it instantly shows you the best matches. Built for speed, it returns results **5,000 times faster** than required.
+Think of it as Google for messages and movies—you type what you're looking for, and it instantly shows you the best matches. Built for speed, it returns results faster than required.
 
 ## Quick Start
 
@@ -27,17 +27,17 @@ open http://localhost:8000/docs
 ## How Fast Is It?
 
 **Target**: Under 100ms end-to-end response time
-**Actual**: 73ms average (99% under 100ms!)
+**Actual**: 74ms average (99% under 100ms!)
 
-The search engine itself performs queries in **0.02ms** by loading all data into memory at startup and using a smart indexing technique called an "inverted index"—the same approach Google uses. The remaining latency (~73ms) comes from network routing through CloudFront's global CDN.
+The search engine itself performs queries in **0.02ms** by loading all data into memory at startup and using a smart indexing technique called an "inverted index"—the same approach Google uses. The remaining latency (~74ms) comes from network routing through CloudFront's global CDN.
 
 ## Features
 
-- ⚡ **Sub-100ms API response** - 73ms average with 99% reliability
+- ⚡ **Sub-100ms API response** - 74ms average with 99% reliability
 - 🚀 **Sub-millisecond search engine** - 0.02ms in-memory index queries
 - 📄 **Pagination** to browse through results efficiently
 - 🔍 **Flexible search** - find messages, movies, or both at once
-- 🛡️ **Rate limiting** (60 requests/minute) to prevent abuse
+- 🛡️ **Rate limiting** (300 requests per 5 minutes) to prevent abuse
 - 🌐 **CORS enabled** for web applications
 - 📊 **Auto-generated docs** at `/docs`
 - ✅ **23 automated tests** ensuring everything works
@@ -165,32 +165,103 @@ I picked **in-memory inverted index** because it perfectly balances simplicity a
 
 ---
 
-## Bonus 2: Achieving Sub-100ms Latency
+## Bonus 2: Data Insights - Reducing Latency to 30ms
 
-The challenge asked: "How can I reduce latency to 100ms or below?"
-**My answer: I achieved 73ms average latency with 99% of requests under 100ms!**
+**The Challenge:** "Explain how we can reduce the latency to 30ms."
 
-### Performance Journey: From 109ms → 73ms
+**Current Performance:** 74ms average (99% under 100ms)
 
-I deployed and optimized across multiple platforms to achieve consistent sub-100ms latency:
+**The Answer:** To achieve sub-30ms latency consistently, here's what would need to be implemented:
+
+### Current Performance Breakdown
 
 | Platform | Average Latency | Under 100ms | P95 Latency | Notes |
 |----------|----------------|-------------|-------------|-------|
 | **Vercel (Serverless)** | 109ms | 28% | 180ms | Initial deployment - cold starts killed performance |
-| **EC2 Direct (Ohio)** | 66ms | 100% | 75ms | Always-on server - eliminated cold starts |
-| **EC2 + Connection Reuse** | 36ms | 100% | 42ms | HTTP keep-alive reduced connection overhead |
-| **CloudFront + CDN** | **73ms** | **99%** | **78ms** ✅ | Edge caching + global distribution achieved the goal! |
+| **EC2 Direct (Ohio)** | 63ms | 100% | 71ms | Always-on server - eliminated cold starts |
+| **CloudFront + CDN** | **74ms** | **99%** | **85ms** | Current production setup |
+
+**Why is EC2 Direct faster than CloudFront?**
+
+This seems counterintuitive, but makes sense given the testing location:
+
+- **Testing location proximity**: These tests were run from a location relatively close to the Ohio (us-east-2) region
+- **Direct path vs. CDN hop**:
+  - EC2 Direct: `My Location → EC2 (Ohio) → Back` = 63ms
+  - CloudFront: `My Location → CloudFront Edge → EC2 Origin → Edge → Back` = 74ms (~11ms overhead)
+- **When CloudFront wins**:
+  - Users far from Ohio (Europe/Asia) would see 150-200ms to EC2 direct, but only 70-100ms via CloudFront
+  - Cached responses served from edge (30-40ms potential)
+  - Global consistency and DDoS protection
+- **The 158ms max on CloudFront**: Shows the first request (cache miss) penalty - subsequent requests benefit from edge caching
+
+**Verdict**: For users near Ohio, EC2 Direct is faster. For a global audience, CloudFront provides better average performance and reliability.
+
+### Latency Breakdown (Current 74ms)
+
+- **Search engine query**: 0.02ms (negligible)
+- **Network latency**: ~71ms (the bottleneck)
+- **Application processing**: ~3ms
+
+### How to Achieve Sub-30ms Latency
+
+The current 74ms is dominated by network latency. Here are the solutions:
+
+#### **Option 1: AWS Global Accelerator** (Recommended)
+
+**What it does:** Routes traffic through AWS's private backbone network instead of the public internet.
+
+**How it works:**
+- Uses anycast IP addresses to route users to the nearest AWS edge location
+- Traffic travels on AWS's optimized network (faster than public internet)
+- Reduces network latency by 40-60%
+
+**Expected result:** 20-30ms average latency globally
+
+**Cost:** ~$18-25/month ($0.025/hour + $0.015/GB)
+
+#### **Option 2: Multi-Region Deployment**
+
+**What it does:** Deploy the API to multiple AWS regions and route users to the nearest one.
+
+**How it works:**
+- Deploy to 3-4 regions: us-east-1, eu-west-1, ap-southeast-1, us-west-2
+- Use Route 53 latency-based routing
+- Each user connects to the geographically closest region
+
+**Expected result:** 15-30ms average latency depending on user location
+
+**Cost:** ~$10-15/month per region (2-4 regions = $20-60/month)
+
+**Trade-offs:**
+- More complex deployment (multiple EC2 instances)
+- Need to sync data across regions (not needed for this read-only API)
+- Higher operational complexity
+
+### The Verdict
+
+**Why I'm at 74ms:**
+The current 74ms average is actually excellent for a single-region deployment accessed from my location. The latency breakdown shows:
+- Search engine: 0.02ms (incredibly fast ✅)
+- Application: ~3ms (FastAPI with all optimizations ✅)
+- Network: ~71ms (distance from my location to CloudFront edge)
+
+**To reach <30ms consistently:**
+- **Best approach:** AWS Global Accelerator ($25/month) → 20-30ms globally
+- **Alternative:** Multi-Region Deployment ($20-60/month) → 15-30ms depending on location
+
+**Current achievement:** Met the <100ms requirement with 99% success rate! The API performs exceptionally well within the constraints of geographic network latency.
 
 ### Final Architecture
 
 ```
 User Request (Global)
     ↓ HTTPS
-CloudFront Edge (450+ locations) - 73ms average ⚡
+CloudFront Edge (450+ locations) - 74ms average ⚡
     ↓ HTTP (cache miss only)
-EC2 Origin (Ohio) - 66ms
+EC2 Origin (Ohio) - 63ms average
     ↓ Proxied by nginx
-FastAPI + Uvicorn - 0.04ms search time
+FastAPI + Uvicorn - 0.02ms search time
     ↓
 In-Memory Inverted Index
 ```
@@ -209,15 +280,24 @@ Search query time: 0.02-0.05ms
 ### Production Performance (100 Requests)
 
 **CloudFront + CDN** (`https://d1stjbgt7gx0i4.cloudfront.net`):
-- **Average**: 73ms ✅
-- **Median**: 70ms
-- **Min**: 58ms (fastest cached request)
-- **Max**: 221ms (first request - cache miss)
-- **P95**: 78ms
-- **P99**: 91ms
+- **Average**: 74ms ✅
+- **Median**: 72ms
+- **Min**: 61ms (fastest cached request)
+- **Max**: 158ms (first request - cache miss)
+- **P95**: 85ms
+- **P99**: 95ms
 - **99% under 100ms** 🎯
 
-**Key Achievement:** From a 109ms average on Vercel to 73ms with CloudFront - achieving the <100ms requirement with 99% success rate!
+**EC2 Direct** (`http://3.144.147.212`):
+- **Average**: 63ms ✅
+- **Median**: 63ms
+- **Min**: 49ms
+- **Max**: 75ms
+- **P95**: 71ms
+- **P99**: 74ms
+- **100% under 100ms** 🎯
+
+**Key Achievement:** From a 109ms average on Vercel to 74ms with CloudFront - achieving the <100ms requirement with 99% success rate!
 
 ### Optimizations Implemented
 
@@ -255,7 +335,7 @@ Configured CloudFront to cache responses at 450+ edge locations worldwide:
 - Query string caching enabled for different search terms
 - Multi-region deployment (US, Europe, Asia)
 
-**Result:** Achieved 73ms average with 99% of requests under 100ms
+**Result:** Achieved 74ms average with 99% of requests under 100ms
 
 ---
 
@@ -278,7 +358,7 @@ Deployed to EC2 instead of serverless:
 - Persistent in-memory data
 - 2 Uvicorn workers for concurrency
 
-**Result:** Consistent 66ms performance without CloudFront
+**Result:** Consistent 63ms performance without CloudFront
 
 ---
 
@@ -291,7 +371,7 @@ Nginx configured with connection pooling:
 proxy_set_header Connection "";
 keepalive_timeout 65;
 ```
-**Result:** First request 66ms, subsequent requests 36ms average
+**Result:** First request 63ms, subsequent requests 49ms average
 
 ---
 
@@ -341,7 +421,7 @@ All tests pass in under 1 second.
 
 ## Security Features
 
-- **Rate limiting**: 60 requests/minute per IP
+- **Rate limiting**: 300 requests per 5 minutes per IP
 - **Input validation**: Rejects invalid queries
 - **CORS protection**: Configurable origins
 - **No SQL injection**: No database used!
@@ -382,7 +462,6 @@ aurora-search-engine/
 ├── test_search_engine.py # Search engine unit tests
 ├── requirements.txt     # Python dependencies
 ├── .env.example         # Configuration template
-├── render.yaml          # Deployment config
 └── README.md            # You are here!
 ```
 
@@ -397,9 +476,9 @@ The API is deployed across multiple platforms for optimal performance:
 **🌐 CloudFront CDN:** https://d1stjbgt7gx0i4.cloudfront.net
 
 **Performance:**
-- Average latency: **73ms**
+- Average latency: **74ms**
 - 99% of requests under 100ms
-- P95 latency: 78ms
+- P95 latency: 85ms
 - Global edge caching (450+ locations)
 - HTTPS with DDoS protection
 
@@ -411,15 +490,15 @@ The API is deployed across multiple platforms for optimal performance:
 
 ### Alternative Deployments
 
-**EC2 Direct:** http://3.144.147.212
-- Average latency: 66ms
+**EC2 Direct**
+- Average latency: 63ms
 - No caching, always-on server
-- Use for testing or if CloudFront has issues
+- Used for testing
 
-**Vercel (Legacy):** https://aurora-search-engine.vercel.app
+**Vercel (Legacy - Deprecated):** https://aurora-search-engine.vercel.app
 - Average latency: 109ms
 - Serverless deployment
-- May have cold starts
+- Has cold starts
 
 ---
 
@@ -484,8 +563,7 @@ Built as a technical assessment. Learned a ton. 🚀
 
 ## Learn More
 
-- [LEARNING.md](LEARNING.md) - Deep dive into every concept used
-- [API Docs](http://localhost:8000/docs) - Interactive documentation
+- [API Docs](https://d1stjbgt7gx0i4.cloudfront.net/docs) - Interactive documentation
 - [FastAPI Documentation](https://fastapi.tiangolo.com)
 
 ---
