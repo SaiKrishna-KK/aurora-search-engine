@@ -19,21 +19,11 @@ jobs:
         printf '%s\n' '${{ secrets.EC2_SSH_KEY }}' > ~/.ssh/ec2_key.pem
         chmod 600 ~/.ssh/ec2_key.pem
 
-        # Debug
-        echo "Key file size: $(wc -c < ~/.ssh/ec2_key.pem) bytes"
-        echo "First line of key:"
-        head -n 1 ~/.ssh/ec2_key.pem
-        echo "Last line of key:"
-        tail -n 1 ~/.ssh/ec2_key.pem
-
     - name: Deploy to EC2
       env:
         EC2_HOST: ${{ secrets.EC2_HOST }}
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
       run: |
-        # Test SSH connection first
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/ec2_key.pem $EC2_USERNAME@$EC2_HOST "echo 'SSH connection successful'" || exit 1
-
         # SSH into EC2 and deploy
         ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
           cd ~/aurora-search-engine
