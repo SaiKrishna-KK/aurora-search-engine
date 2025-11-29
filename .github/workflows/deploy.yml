@@ -17,10 +17,10 @@ jobs:
       env:
         EC2_HOST: ${{ secrets.EC2_HOST }}
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        EC2_SSH_KEY_BASE64: ${{ secrets.EC2_SSH_KEY_BASE64 }}
       run: |
-        # Save SSH key to file and fix permissions
-        echo "$EC2_SSH_KEY" > ec2_key.pem
+        # Decode base64 SSH key and save to file
+        echo "$EC2_SSH_KEY_BASE64" | base64 -d > ec2_key.pem
         chmod 400 ec2_key.pem
 
         # Debug: Check if key file was created properly
