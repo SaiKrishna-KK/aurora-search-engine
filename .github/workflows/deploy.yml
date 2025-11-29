@@ -19,8 +19,8 @@ jobs:
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       run: |
-        # Save SSH key to file
-        echo "$EC2_SSH_KEY" > ec2_key.pem
+        # Save SSH key to file (preserve newlines)
+        echo "$EC2_SSH_KEY" | tr -d '\r' > ec2_key.pem
         chmod 400 ec2_key.pem
 
         # SSH into EC2 and deploy
