@@ -479,7 +479,6 @@ Building this taught me:
 | Average query time | 0.02ms |
 | 95th percentile | 0.05ms |
 | Data loaded | 100 messages, 35 movies |
-| Startup time | 3-5 seconds |
 | Memory usage | ~50MB |
 | Requests/second | 1000+ (single instance) |
 
