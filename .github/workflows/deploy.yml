@@ -13,25 +13,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+        chmod 600 ~/.ssh/ec2_key.pem
+
+        # Debug
+        echo "Key file size: $(wc -c < ~/.ssh/ec2_key.pem) bytes"
+        echo "First line of key:"
+        head -n 1 ~/.ssh/ec2_key.pem
+
     - name: Deploy to EC2
       env:
         EC2_HOST: ${{ secrets.EC2_HOST }}
         EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-        EC2_SSH_KEY_BASE64: ${{ secrets.EC2_SSH_KEY_BASE64 }}
       run: |
-        # Decode base64 SSH key and save to file
-        echo "$EC2_SSH_KEY_BASE64" | base64 -d > ec2_key.pem
-        chmod 400 ec2_key.pem
-
-        # Debug: Check if key file was created properly
-        echo "Key file size: $(wc -c < ec2_key.pem) bytes"
-        head -n 1 ec2_key.pem
-
         # Test SSH connection first
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ec2_key.pem $EC2_USERNAME@$EC2_HOST "echo 'SSH connection successful'" || exit 1
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/ec2_key.pem $EC2_USERNAME@$EC2_HOST "echo 'SSH connection successful'" || exit 1
 
         # SSH into EC2 and deploy
-        ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem $EC2_USERNAME@$EC2_HOST << 'ENDSSH'
           cd ~/aurora-search-engine
 
           # Pull latest code from GitHub
@@ -57,4 +59,4 @@ jobs:
         ENDSSH
 
         # Clean up
-        rm -f ec2_key.pem
+        rm -f ~/.ssh/ec2_key.pem
