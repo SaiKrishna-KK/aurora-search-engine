@@ -148,9 +148,11 @@ async def search(
     query_time_ms = round((time.time() - start_time) * 1000, 2)
 
     # Add edge caching headers for CDN/edge caching
-    # Cache for 60s, serve stale for up to 3600s while revalidating
-    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=3600"
+    # Aggressive caching: 5 min cache, serve stale for 1 hour while revalidating
+    response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=3600"
     response.headers["CDN-Cache-Control"] = "public, max-age=300, stale-while-revalidate=3600"
+    # Enable early hints for faster browser rendering
+    response.headers["Accept-CH"] = "Sec-CH-UA, Sec-CH-UA-Mobile, Sec-CH-UA-Platform"
 
     # Build response
     response_data = {
